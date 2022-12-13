@@ -30,18 +30,16 @@ MIN_AXE = 1
 MAX_STEPS = 2
 # 1 tile to the next: 300
 NEXTTILE = 300
+# Necessary movement to read the next tile
 READTILE = 200
-
-# The following are the right measures
-# robot = DriveBase(left_motor, right_motor, wheel_diameter=38, axle_track=200)
 
 # Initialize the motors.
 left_motor = Motor(Port.D)
 right_motor = Motor(Port.A)
-#claw_motor = Motor(Port.B)
-#gun_motor = Motor(Port.C)
+claw_motor = Motor(Port.C)
+cannon_motor = Motor(Port.B)
 
-#distance_sensor = UltrasonicSensor(Port.S3)
+distance_sensor = UltrasonicSensor(Port.S1)
 color_sensor = ColorSensor(Port.S2)
 gyro_sensor = GyroSensor(Port.S3)
 button = TouchSensor(Port.S4)
@@ -185,7 +183,8 @@ def recognize():
         elif color == Color.RED:
             # A piece of ammo was found and saved in the array
             adjacent_tiles[index] = "ammo"
-
+        
+        robot.straight(-READTILE)
         robot.turn(90)
         fixAngle()
 
@@ -195,24 +194,71 @@ def recognize():
  ========================================
 """
 
-        
+"""
+ ========================================
+ Claw Arm Movement
+ ========================================
+"""
+
+def openClaw():
+    claw_motor.run_until_stalled(200)
+
+def closeClaw():
+    claw_motor.run_until_stalled(-200)
+
+
+"""
+ ========================================
+ ============ End of Section ============
+ ========================================
+"""
+
+"""
+ ========================================
+ Cannon Use and Movement
+ ========================================
+"""
+
+
+def shootCannon():
+    cannon_motor.run_target(90, 40)
+    cannon_motor.run_target(90, -40)
+
+
+"""
+ ========================================
+ ============ End of Section ============
+ ========================================
+"""
 
 
 
 
+def main():
 
-goalAxesXandY = [6,6]
-boolean = True
-i = 0
-gyro_sensor.reset_angle(0)
-print("Initial Angle: " + str(gyro_sensor.angle()))
+    goalAxesXandY = [6,6]
+    boolean = True
+    i = 0
+    gyro_sensor.reset_angle(0)
+    print("Initial Angle: " + str(gyro_sensor.angle()))
 
-while(boolean):
+    while(boolean):
 
-    if(button.pressed()):
-        time.sleep(2)
-        print("Iteration: " + str(i))
-        print("Initial Position: " + str(axesXandY))
-        boolean = movement()
-        print("Final Position: " + str(axesXandY))
-        i += 1
+        if(button.pressed()):
+            time.sleep(2)
+            print("Iteration: " + str(i))
+            print("Initial Position: " + str(axesXandY))
+            boolean = movement()
+            print("Final Position: " + str(axesXandY))
+            i += 1
+
+def test():
+
+    while(1):
+        shootCannon()
+        return
+
+
+# Execute:
+
+test()
