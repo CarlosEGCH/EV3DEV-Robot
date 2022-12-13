@@ -13,7 +13,7 @@ https://education.lego.com/en-us/support/mindstorms-ev3/building-instructions#ro
 
 from pybricks.hubs import EV3Brick
 from pybricks.ev3devices import TouchSensor, Motor, ColorSensor, GyroSensor, UltrasonicSensor
-from pybricks.parameters import Port
+from pybricks.parameters import Port, Color
 from pybricks.robotics import DriveBase
 import time
 
@@ -30,6 +30,7 @@ MIN_AXE = 1
 MAX_STEPS = 2
 # 1 tile to the next: 300
 NEXTTILE = 300
+READTILE = 200
 
 # The following are the right measures
 # robot = DriveBase(left_motor, right_motor, wheel_diameter=38, axle_track=200)
@@ -84,6 +85,8 @@ def fixAngle():
             robot.turn(1)
             fixedAngle += 1
         else:
+            if gyro_sensor.angle() == 360 or gyro_sensor.angle() == -360:
+                gyro_sensor.reset_angle(0)
             break
 
 def smallestAngleBetween(currentAngle, goalAngle):
@@ -147,12 +150,55 @@ def movement():
         steps += 1
     return True
 
-# while(1):
 
-#     robot.straight(NEXTTILE)
-#     #fixAngle()
-#     robot.turn(-90)
-#     #gyro_sensor.reset_angle(0)
+"""
+ ========================================
+ Recognizement of items and ammunition
+ ========================================
+"""
+
+def detectColor():
+    return color_sensor.color()
+
+def recognize():
+    # The robot must move enough to read the color on the next tile
+    # and return to the original place.
+
+    # Then turn 90 degrees and read the next adjacent tile.
+    adjacent_tiles = ["nothing", "nothing", "nothing", "nothing"]
+
+    for index in len(adjacent_tiles) - 1:
+        # Move towards the tile to read it
+        robot.straight(READTILE)
+        time.sleep(1)
+
+        # Correct the angle error
+        fixAngle()
+        time.sleep(1)
+
+        # Detect which color the next tile is
+        color = detectColor()
+
+        if color == Color.BLUE:
+            # An item was found and saved in the array
+            adjacent_tiles[index] = "item"
+        elif color == Color.RED:
+            # A piece of ammo was found and saved in the array
+            adjacent_tiles[index] = "ammo"
+
+        robot.turn(90)
+        fixAngle()
+
+"""
+ ========================================
+ ============ End of Section ============
+ ========================================
+"""
+
+        
+
+
+
 
 
 goalAxesXandY = [6,6]
