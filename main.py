@@ -16,6 +16,7 @@ from pybricks.ev3devices import TouchSensor, Motor, ColorSensor, GyroSensor, Ult
 from pybricks.parameters import Port, Color
 from pybricks.robotics import DriveBase
 import time
+import random
 
 # Initialize the EV3 Brick.
 ev3 = EV3Brick()
@@ -56,10 +57,40 @@ current_degree = RIGHT
 #           [X, Y]
 axesXandY = [1, 1]
 #               [     X     ,      Y     ]
-# In the initial goal it could be the position of a piece 
-goalAxesXandY = ["undefined", "undefined"]
-# The danger that the SB has
-danger = False
+# It is an array of goals where the first element has the bigger priority
+goalAxesXandY = []
+# The danger that the SB has. Possible values are "0", "1", "2"
+danger = 0
+
+"""
+ ========================================
+    Add a new goal in the first position
+ ========================================
+"""
+
+def addGoal(goal):
+    global goalAxesXandY
+    goalAxesXandY.insert(0,goal)
+
+"""
+ ========================================
+    Deletes a goal when achieved
+ ========================================
+"""
+
+def goalAchieved(goal):
+    try:
+        global goalAxesXandY
+        goalAxesXandY.remove(goal)
+        return True
+    except ValueError:
+        return False
+
+"""
+ ========================================
+    Fixes teh angle
+ ========================================
+"""
 
 def fixAngle():
 
@@ -90,10 +121,27 @@ def fixAngle():
                 gyro_sensor.reset_angle(0)
             break
 
+"""
+ ========================================
+    Return the smallest angle to see if the SB moves left or right
+ ========================================
+"""
+
 def smallestAngleBetween(currentAngle, goalAngle):
     a = currentAngle - goalAngle
-    b = 360 - abs(currentAngle - goalAngle)
+
+    if(currentAngle - goalAngle > 0):
+        b = currentAngle - goalAngle - 360
+    else:
+        b = 360 - abs(currentAngle - goalAngle)
+
     return a if abs(a) < abs(b) else b
+
+"""
+ ========================================
+    Update the SB's axes
+ ========================================
+"""
 
 def updateAxes(goalAngle):
     global axesXandY
@@ -102,10 +150,18 @@ def updateAxes(goalAngle):
     elif(goalAngle == RIGHT and axesXandY[0] != MAX_AXE): axesXandY[0] += 1
     elif(goalAngle == LEFT and axesXandY[0] != MIN_AXE): axesXandY[0] -= 1
 
+"""
+ ========================================
+    Move the bot in the respective direction and spin
+ ========================================
+"""
+
 def newPosition(goalAngle):
     global current_degree
     #SB's rotation and movement
-    robot.turn(smallestAngleBetween(current_degree, goalAngle))
+    test = smallestAngleBetween(current_degree, goalAngle)
+    print ("Siu " + str(test))
+    robot.turn(test)
     time.sleep(1)
     fixAngle()
     robot.straight(NEXTTILE)
@@ -116,38 +172,99 @@ def newPosition(goalAngle):
     updateAxes(goalAngle)
     return
 
+"""
+ ========================================
+ Defines the path to be taken by the SB
+ ========================================
+"""
+
 def defineGoalAngle():
-    global goalAxesXandY, axesXandY
-    goal = None
-    if goalAxesXandY[0] > axesXandY[0]:
-        goal = RIGHT
-    elif goalAxesXandY[0] < axesXandY[0]:
-        goal = LEFT
-    elif goalAxesXandY[1] > axesXandY[1]:
-        goal = DOWN
-    elif goalAxesXandY[1] < axesXandY[1]:
-        goal = UP
-    else:
-        print("I'm here")
-    return goal
+    global goalAxesXandY, axesXandY, lastMovement
+    goal = []
+    decision = None
+    if goalAxesXandY == []:
+        removeGoal = None
+        if lastMovement == RIGHT:
+            removeGoal = LEFT
+        elif lastMovement == LEFT:
+            removeGoal = RIGHT
+        elif lastMovement == UP:
+            removeGoal = DOWN
+        elif lastMovement == DOWN:
+            removeGoal = UP
+        goal.append(RIGHT, LEFT, DOWN, UP)
+        goal.remove(removeGoal)
+    if goalAxesXandY[0][0] > axesXandY[0]:
+        goal.append(RIGHT)
+    if goalAxesXandY[0][0] < axesXandY[0]:
+        goal.append(LEFT)
+    if goalAxesXandY[0][1] > axesXandY[1]:
+        goal.append(DOWN)
+    if goalAxesXandY[0][1] < axesXandY[1]:
+        goal.append(UP)
+    # else:
+    #     print("I'm here")
+    if goal != []:
+        # while (1):
+        #     if len(goal) == 1:
+        #         return goal[0]
+        decision = random.choice(goal)
+        lastMovement = decision
+        print(decision)
+            # if checkDecision == True:
+            #     return decision
+            # goal.remove(decision)
+        return decision
+    return None
+
+"""
+ ========================================
+ Checks if the goal is the achieved 
+ ========================================
+"""
 
 def checkGoal():
-    if goalAxesXandY == axesXandY:
+    if goalAxesXandY[0] == axesXandY:
         print("I'm here")
+        goalAchieved(goalAxesXandY[0])
         return True
     return False
 
+"""
+ ========================================
+ Movement of the SB each round
+ ========================================
+"""
+
 def movement():
-    goal = 'siu'
+    goal = ''
     steps = 0
-    while danger == False and steps < 2: 
-        goal = defineGoalAngle()
-        if goal is None:
-            return False
-        else:
-            newPosition(goal)
-            if checkGoal() == True:
+    while steps < 2:
+        if danger == 0:
+            goal = defineGoalAngle()
+            if goal is None:
                 return False
+            else:
+                newPosition(goal)
+                if checkGoal() == True:
+                    return False
+        elif danger == 1:
+            if steps == 1:
+                break
+            goal = defineGoalAngle()
+            if goal is None:
+                return False
+            else:
+                newPosition(goal)
+                if checkGoal() == True:
+                    return False
+        elif danger == 2:
+            if steps == 1:
+                newPosition(lastMovement)
+                break
+            #if steps == 0:
+            #   Reconocimiento
+        
         steps += 1
     return True
 
@@ -251,7 +368,7 @@ def pickupItem():
 def moveToGoal(goal):
 
     global goalAxesXandY
-    goalAxesXandY = goal
+    goalAxesXandY.append(goal)
 
     moving = True
     i = 0
@@ -269,7 +386,7 @@ def moveToGoal(goal):
 
 def main():
 
-    moveToGoal([2, 2])
+   moveToGoal([3, 3])
 
 
 # Execute:
