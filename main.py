@@ -31,7 +31,10 @@ MAX_STEPS = 2
 # 1 tile to the next: 300
 NEXTTILE = 300
 # Necessary movement to read the next tile
-READTILE = 200
+READTILE = 100
+# Pickup item distance
+PICKUPITEM = 160
+
 
 # Initialize the motors.
 left_motor = Motor(Port.D)
@@ -165,7 +168,7 @@ def recognize():
     # Then turn 90 degrees and read the next adjacent tile.
     adjacent_tiles = ["nothing", "nothing", "nothing", "nothing"]
 
-    for index in len(adjacent_tiles) - 1:
+    for index in range(len(adjacent_tiles)):
         # Move towards the tile to read it
         robot.straight(READTILE)
         time.sleep(1)
@@ -176,6 +179,8 @@ def recognize():
 
         # Detect which color the next tile is
         color = detectColor()
+
+        print("Color: " + str(color))
 
         if color == Color.BLUE:
             # An item was found and saved in the array
@@ -188,11 +193,9 @@ def recognize():
         robot.turn(90)
         fixAngle()
 
-"""
- ========================================
- ============ End of Section ============
- ========================================
-"""
+    print(adjacent_tiles)
+
+
 
 """
  ========================================
@@ -207,11 +210,7 @@ def closeClaw():
     claw_motor.run_until_stalled(-200)
 
 
-"""
- ========================================
- ============ End of Section ============
- ========================================
-"""
+
 
 """
  ========================================
@@ -222,17 +221,32 @@ def closeClaw():
 
 def shootCannon():
     cannon_motor.run_target(90, 40)
-    cannon_motor.run_target(90, -40)
+    cannon_motor.run_target(90, 0)
+
+
 
 
 """
  ========================================
- ============ End of Section ============
+ Cannon Use and Movement
  ========================================
 """
 
+def pickupItem():
+
+    openClaw()
+    robot.straight(PICKUPITEM)
+    robot.turn(-30)
+    closeClaw()
+    robot.turn(30)
+    robot.straight(NEXTTILE - PICKUPITEM)
 
 
+"""
+ ========================================
+ Main Execution
+ ========================================
+"""
 
 def main():
 
@@ -254,10 +268,8 @@ def main():
 
 def test():
 
-    while(1):
-        shootCannon()
-        return
-
+    pickupItem()
+    
 
 # Execute:
 
