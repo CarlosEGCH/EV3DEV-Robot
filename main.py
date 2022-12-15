@@ -57,7 +57,7 @@ current_degree = RIGHT
 axesXandY = [1, 1]
 #               [     X     ,      Y     ]
 # In the initial goal it could be the position of a piece 
-goalAxesXandY = ['undefined', 'undefined']
+goalAxesXandY = ["undefined", "undefined"]
 # The danger that the SB has
 danger = False
 
@@ -72,7 +72,7 @@ def fixAngle():
     else:
         fixedAngle = currentAngle%90
     if fixedAngle > 50:
-        fixedAngle = 90 - fixedAngle
+        fixedAngle = fixedAngle - 90
     elif fixedAngle < -50:
         fixedAngle = 90 - abs(fixedAngle) 
 
@@ -248,29 +248,30 @@ def pickupItem():
  ========================================
 """
 
-def main():
+def moveToGoal(goal):
 
-    goalAxesXandY = [6,6]
-    boolean = True
+    global goalAxesXandY
+    goalAxesXandY = goal
+
+    moving = True
     i = 0
-    gyro_sensor.reset_angle(0)
     print("Initial Angle: " + str(gyro_sensor.angle()))
 
-    while(boolean):
+    while(moving):
 
-        if(button.pressed()):
+        if(True):
             time.sleep(2)
             print("Iteration: " + str(i))
             print("Initial Position: " + str(axesXandY))
-            boolean = movement()
+            moving = movement()
             print("Final Position: " + str(axesXandY))
             i += 1
 
-def test():
+def main():
 
-    pickupItem()
-    
+    moveToGoal([2, 2])
+
 
 # Execute:
 
-test()
+main()
