@@ -32,7 +32,7 @@ MAX_STEPS = 2
 # 1 tile to the next: 300
 NEXTTILE = 300
 # Necessary movement to read the next tile
-READTILE = 100
+READTILE = 140
 # Pickup item distance
 PICKUPITEM = 160
 
@@ -88,7 +88,7 @@ def goalAchieved(goal):
 
 """
  ========================================
-    Fixes teh angle
+    Fixes the angle
  ========================================
 """
 
@@ -160,8 +160,10 @@ def newPosition(goalAngle):
     global current_degree
     #SB's rotation and movement
     test = smallestAngleBetween(current_degree, goalAngle)
-    print ("Siu " + str(test))
+    print("Smallest Angle Between " + str(test))
+    print("Current Before Turn: " + str(gyro_sensor.angle()))
     robot.turn(test)
+    print("Current After Turn: " + str(gyro_sensor.angle()))
     time.sleep(1)
     fixAngle()
     robot.straight(NEXTTILE)
@@ -237,9 +239,13 @@ def checkGoal():
 """
 
 def movement():
+    global danger
     goal = ''
     steps = 0
     while steps < 2:
+        print("Sensing Danger")
+        time.sleep(2)
+        danger = senseSmell()
         if danger == 0:
             goal = defineGoalAngle()
             if goal is None:
@@ -262,9 +268,12 @@ def movement():
             if steps == 1:
                 newPosition(lastMovement)
                 break
-            #if steps == 0:
-            #   Reconocimiento
-        
+            # if steps == 0:              
+               # recognizement = recognize()
+
+
+
+        danger = 0
         steps += 1
     return True
 
@@ -286,6 +295,9 @@ def recognize():
     adjacent_tiles = ["nothing", "nothing", "nothing", "nothing"]
 
     for index in range(len(adjacent_tiles)):
+
+        
+
         # Move towards the tile to read it
         robot.straight(READTILE)
         time.sleep(1)
@@ -309,8 +321,6 @@ def recognize():
         robot.straight(-READTILE)
         robot.turn(90)
         fixAngle()
-
-    print(adjacent_tiles)
 
 
 
@@ -345,7 +355,7 @@ def shootCannon():
 
 """
  ========================================
- Cannon Use and Movement
+ Pickup Item Method
  ========================================
 """
 
@@ -358,6 +368,32 @@ def pickupItem():
     robot.turn(30)
     robot.straight(NEXTTILE - PICKUPITEM)
 
+
+"""
+ ========================================
+ Zombie recognizement
+ ========================================
+"""
+
+def senseSmell():
+
+    danger = 0
+
+    for index in range(4):
+
+        distance = distance_sensor.distance()
+
+        if ( 140 < distance < 420 and danger <= 2 ):
+            danger = 2
+            
+        elif ( 490 < distance < 710 and danger <= 1 ):
+            danger = 1
+
+        robot.turn(90)
+        fixAngle()
+
+    print("Danger Sensed: " + str(danger))
+    return danger
 
 """
  ========================================
@@ -377,7 +413,7 @@ def moveToGoal(goal):
     while(moving):
 
         if(True):
-            time.sleep(2)
+            time.sleep(1)
             print("Iteration: " + str(i))
             print("Initial Position: " + str(axesXandY))
             moving = movement()
@@ -386,7 +422,7 @@ def moveToGoal(goal):
 
 def main():
 
-   moveToGoal([3, 3])
+    moveToGoal([3, 3])
 
 
 # Execute:
