@@ -19,6 +19,7 @@ from pybricks.media.ev3dev import SoundFile
 import operator
 import time
 import random
+import threading
 
 
 # Initialize the EV3 Brick.
@@ -34,8 +35,8 @@ LEFT = 180
 RIGHT = 0
 CORNER_RIGHT = 45
 CORNER_LEFT = 135
-CORNER_RIGHT_DOWN = 225
 CORNER_LEFT_DOWN = 225
+CORNER_RIGHT_DOWN = 315
 
 MAX_AXE = 6
 MIN_AXE = 1
@@ -68,22 +69,27 @@ gyro_sensor.reset_angle(0)
 current_degree = RIGHT
 #           [X, Y]
 axesXandY = [1, 1]
+# Win condition
+axesWin = [6,6]
 #               [     X     ,      Y     ]
 # It is an array of goals where the first element has the bigger priority
-goalAxesXandY = []
+goalAxesXandY = [{"Type": "Zombie", "Axes": []}, {"Type": "Ammo", "Axes": []}, {"Type": "Mota", "Axes": []}, {"Type": "Item", "Axes": []}]
 # The danger that the SB has. Possible values are "0", "1", "2"
 danger = 0
 # Variable to know if the SB has ammo or not
 ammo = False
+# Variable to know if the SB has an item or not
+item = False
 # Current steps that the SB can take
 current_steps = MIN_STEPS
 # If the SB has already recognized in the round
 recognized_round = False
-#Number of items
+#Number of items picked
 num_item = 0
-#Number of ammos
-num_ammo = 0
-lastMovement = None
+#alarm 
+alarm = False
+
+lastMovement = []
 
 """
  ========================================
@@ -95,7 +101,10 @@ def addGoal(goal, type_name):
     global goalAxesXandY
     dicti = {"Type": type_name,
              "Axes": goal}
-    goalAxesXandY.insert(0,dicti)
+    for index, item in enumerate(goalAxesXandY):
+        if item["Type"] == type_name:
+            goalAxesXandY[index]["Axes"].insert(0,dicti)
+            break
 
 """
  ========================================
@@ -107,11 +116,26 @@ def goalAchieved(goal):
     try:
         global goalAxesXandY
         for index in range(len(goalAxesXandY)):
-            if goalAxesXandY[index]["Axes"] == goal:
-                goalAxesXandY.remove(goalAxesXandY[index])
-            return True
+            if goalAxesXandY[index]["Axes"]:
+                for i, item in enumerate(goalAxesXandY[index]["Axes"]):
+                    if goalAxesXandY[index]["Axes"][i]["Axes"] == goal:
+                        goalAxesXandY.remove(goalAxesXandY[index]["Axes"][i])
+        return True
     except ValueError:
         return False
+
+"""
+ ========================================
+    Get the highest priority goal 
+ ========================================
+"""
+
+def getFirstGoal():
+    global goalAxesXandY
+    for index in range(len(goalAxesXandY)):
+        if goalAxesXandY[index]["Axes"]:
+            return goalAxesXandY[index]["Axes"][0]
+    return []
 
 """
  ========================================
@@ -135,6 +159,42 @@ def leaveAmmo():
     current_steps = MIN_STEPS
     ammo = False
     
+"""
+ ========================================
+    Pick the item and update the state 
+ ========================================
+"""
+
+def pickItem():
+    global item, alarm
+    item = True
+    addGoal([6,6], "Mota")
+    alarm = True 
+
+"""
+ ========================================
+    Leave the item and update the state 
+ ========================================
+"""
+
+def leaveItem():
+    global item, alarm
+    item = False  
+    alarm = False
+
+
+"""
+ ========================================
+    Play the alarm sound 
+ ========================================
+"""
+
+def playAlarm():
+    global alarm
+
+    while True: 
+        if alarm:
+            ev3.speaker.play_file(SoundFile.SONAR)
 
 """
  ========================================
@@ -149,13 +209,13 @@ def fixAngle():
     print("Current: " + str(currentAngle))
 
     if(gyro_sensor.angle() < 0):
-        fixedAngle = currentAngle%90 * -1
+        fixedAngle = currentAngle%45 * -1
     else:
-        fixedAngle = currentAngle%90
-    if fixedAngle > 50:
-        fixedAngle = fixedAngle - 90
-    elif fixedAngle < -50:
-        fixedAngle = 90 - abs(fixedAngle) 
+        fixedAngle = currentAngle%45
+    if fixedAngle > 22:
+        fixedAngle = fixedAngle - 45
+    elif fixedAngle < -22:
+        fixedAngle = 45 - abs(fixedAngle) 
 
     print("Fixed: " + str(fixedAngle))
 
@@ -167,7 +227,7 @@ def fixAngle():
             robot.turn(1)
             fixedAngle += 1
         else:
-            if gyro_sensor.angle() == 360 or gyro_sensor.angle() == -360:
+            if abs(gyro_sensor.angle() % 360) == 0:
                 gyro_sensor.reset_angle(0)
             break
 
@@ -224,6 +284,35 @@ def newPosition(goalAngle):
     updateAxes(goalAngle)
     return
 
+def mov():
+    global lastMovement
+
+    add = axesXandY
+    lastMovement.append([add[0], add[1]])
+
+    if len(lastMovement) == 4:
+        lastMovement.pop(3)
+
+def deleteMovement():
+    global lastMovement, axesXandY
+
+    removeMovement = []
+
+    if [axesXandY[0] + 1, axesXandY[1]] in lastMovement:
+        removeMovement.append(RIGHT)
+
+    if [axesXandY[0] - 1, axesXandY[1]] in lastMovement:
+        removeMovement.append(LEFT)
+
+    if [axesXandY[0], axesXandY[1] + 1] in lastMovement:
+        removeMovement.append(DOWN)
+    
+    if [axesXandY[0], axesXandY[1] - 1] in lastMovement:
+        removeMovement.append(UP)
+
+    return removeMovement
+    
+
 def oppositeMovement(lastMovement):
 
     if lastMovement == RIGHT:
@@ -243,41 +332,44 @@ def oppositeMovement(lastMovement):
 
 def test(removeGoal):
     goal = [RIGHT, LEFT, DOWN, UP]
-    if removeGoal != None:
-        goal.remove(removeGoal)
-    if axesXandY[0] + 1 > MAX_AXE:
+    if removeGoal:
+        for t in removeGoal:
+            goal.remove(t)
+    if axesXandY[0] + 1 > MAX_AXE and RIGHT in goal:
         goal.remove(RIGHT)
-    if axesXandY[0] - 1 < MIN_AXE:
+    if axesXandY[0] - 1 < MIN_AXE and LEFT in goal:
         goal.remove(LEFT)
-    if axesXandY[1] + 1 > MAX_AXE:
+    if axesXandY[1] + 1 > MAX_AXE and DOWN in goal:
         goal.remove(DOWN)
-    if axesXandY[1] - 1 < MIN_AXE:
+    if axesXandY[1] - 1 < MIN_AXE and UP in goal:
         goal.remove(UP)
     return goal
-    
 
 def defineGoalAngle():
-    global goalAxesXandY, axesXandY, lastMovement
+    global axesXandY, lastMovement
+    goalAxes = getFirstGoal()
     goal = []
     decision = None
-    if goalAxesXandY == []:
+
+    print("AAAAAAAAAAAAAAAA " + str(goalAxes))
+
+    if goalAxes == []:
         removeGoal = None
-        if lastMovement != None:
-            removeGoal = oppositeMovement(lastMovement)
+        if lastMovement:
+            removeGoal = deleteMovement()
         goal = test(removeGoal)
     
-    elif goalAxesXandY[0]["Axes"][0] > axesXandY[0]:
+    elif goalAxes["Axes"][0] > axesXandY[0]:
         goal.append(RIGHT)
-    elif goalAxesXandY[0]["Axes"][0] < axesXandY[0]:
+    elif goalAxes["Axes"][0] < axesXandY[0]:
         goal.append(LEFT)
-    elif goalAxesXandY[0]["Axes"][1] > axesXandY[1]:
+    elif goalAxes["Axes"][1] > axesXandY[1]:
         goal.append(DOWN)
-    elif goalAxesXandY[0]["Axes"][1] < axesXandY[1]:
+    elif goalAxes["Axes"][1] < axesXandY[1]:
         goal.append(UP)
 
     if goal != []:
         decision = random.choice(goal)
-        lastMovement = decision
         print("My move is: " + str(decision))
         return decision
 
@@ -290,10 +382,12 @@ def defineGoalAngle():
 """
 
 def checkGoal():
-    if goalAxesXandY != []:
-        if goalAxesXandY[0]["Axes"] == axesXandY:
+    goalAxes = getFirstGoal()
+
+    if goalAxes != []:
+        if goalAxes["Axes"] == axesXandY:
             print("I'm here")
-            goalAchieved(goalAxesXandY[0]["Axes"])
+            goalAchieved(goalAxes["Axes"])
             return True
     return False
 
@@ -304,16 +398,18 @@ def move():
         return False
     else:
         newPosition(goal)
-        if checkGoal() == True:
+        if checkGoal():
             return False
 
 def aimToZombie():
-    global goalAxesXandY, axesXandY, current_degree
+    global axesXandY, current_degree
+
+    goalAxes = getFirstGoal()
     axes = []
-    for index in range(len(goalAxesXandY)):
-        if goalAxesXandY[index]["Type"] == "Zombie":
-            axes = goalAxesXandY[index]["Axes"]
-            break
+
+    if goalAxes["Type"] == "Zombie":
+        axes = goalAxes["Axes"]
+
     axesX = axesXandY[0] - axes[0]
     axesY = axesXandY[1] - axes[1]
 
@@ -342,7 +438,29 @@ def aimToZombie():
 def shootToZombie():
     aimToZombie()
     shootCannon()
+    leaveAmmo()
 
+"""
+ ========================================
+ Check if the SB won the game
+ ========================================
+"""
+def checkFinale():
+    global axesXandY, item, num_item, axesWin
+
+    flagWin = True
+
+    if axesXandY == axesWin:
+        if item and num_item < 2:
+            leaveItem()
+            num_item += 1
+            goalAchieved(axesWin)
+
+    if num_item == 2:
+        flagWin = False
+
+    return flagWin
+        
 
 """
  ========================================
@@ -351,11 +469,14 @@ def shootToZombie():
 """
 
 def movement():
-    global danger
+    global danger, current_steps, recognized_round, lastMovement
     goal = ''
     steps = 0
+    boolean = True
     
     while steps < current_steps:
+
+        mov()
         print("Looking for items in this box")
         searchColors()
         print("Sensing Danger")
@@ -363,7 +484,7 @@ def movement():
         danger = senseSmell()
         if danger == 1:
             if steps == 1:
-                if recognized_round == False and ammo == True:
+                if not recognized_round and ammo:
                     move()
                     danger = senseSmell()
                     if danger == 2:
@@ -373,32 +494,42 @@ def movement():
                 break
         elif danger == 2:
             if steps == 1:
-                if recognized_round == False:
+                if not recognized_round:
                     recognize()
-                    if ammo == True:
+                    if ammo:
                         shootToZombie()
                     else:
-                        sound.speak('Voy a por ti crack')
+                        ev3.speaker.play_file.say('Voy a por ti crack')
                     break
-                newPosition(oppositeMovement(lastMovement))
+                newPosition(oppositeMovement(lastMovement[0]))
                 break
             if steps == 0:              
                 recognize()
-                ammo = True
-                if ammo == True:
+                #ammo = True
+                if ammo:
                     shootToZombie()
                     break
                 move() #Stunn
                 break
 
-        test = random.randint(1,3)
-        if(test == 1):
-            recognize()
+        recognize()
+        print("TESTTTTTTTTTTTTTTTTTTTTT " + str(goalAxesXandY))
+        if not recognized_round:
+            test = random.randint(1,3)
+            if(test == 1):
+                recognize()
+                if steps == 1:
+                    break
 
         move()
+        boolean = checkFinale()
+        if not boolean: 
+            break
+
         steps += 1
+
     recognized_round = False
-    return True
+    return boolean
 
 
 """
@@ -408,42 +539,33 @@ def movement():
 """
 
 def searchColors():
-    global num_item, num_ammo
 
-    # Detect which color the next tile is
+    # Detect which color the current tile is
     color = detectColor()
     print(color)
 
-    if color == Color.BLUE:
-        # An item was found in the current box
-        num_item += 1
+    if color == Color.YELLOW:
+        # An item was found in the current tile
         print("I have found an item")
         pickupItem()
     elif color == Color.RED:
-        # An ammo was found in the current box
-        num_ammo += 1
+        # An ammo was found in the current tile
         print("I have found an ammo")
         pickupItem()
         pickAmmo()
-    elif color == Color.YELLOW:
-        # A Zombie was found in the current box
-        sound.speak('Voy a por ti crack')
+    elif color == Color.BLUE:
+        # A Zombie was found in the current tile
+        ev3.speaker.play_file.say('Voy a por ti crack')
         
 
 
 def detectColor():
     return color_sensor.color()
 
-def recognizeGoal():
+def recognizeGoal(goal):
     global current_degree
-    if current_degree == RIGHT:
-        current_degree = DOWN
-    elif current_degree == DOWN:
-        current_degree = LEFT
-    elif current_degree == LEFT:
-        current_degree = UP
-    elif current_degree == UP:
-        current_degree = RIGHT
+    
+    current_degree = goal
     
 def calculateGoal():
     global axesXandY
@@ -461,22 +583,82 @@ def calculateGoal():
             return [axesXandY[0], axesXandY[1] - 1]
     return None
 
+def checkCorners():
+    global axesXandY
+
+    chances = [RIGHT, UP, LEFT, DOWN]
+
+    if axesXandY[1] == 1:
+        chances.remove(UP)
+    if axesXandY[1] == 6:
+        chances.remove(DOWN)
+    if axesXandY[0] == 1:
+        chances.remove(LEFT)
+    if axesXandY[0] == 6:
+        chances.remove(RIGHT)
+
+    return chances 
+
+def sortDirections2(list_of_directions):
+    global current_degree
+
+    listed = sorted(list_of_directions)
+    aux = listed
+
+    for index, x in enumerate(aux):
+        if x < current_degree:
+            listed.insert(range(len(listed)), x)
+            listed.remove(x)
+
+    print("Siuuuuuuuuu " + str(listed))
+    return listed
+
+
+
+
+def sortDirections(list_of_directions):
+    global current_degree
+
+    listed = []
+    for x in list_of_directions:
+        sort =  abs(smallestAngleBetween(current_degree, x))
+        i = None
+        if listed:
+            for index, option in enumerate(listed):
+                if sort <= abs(smallestAngleBetween(current_degree, option)):
+                    i = index
+                    break
+            if i != None:
+                listed.insert(i , x)
+            else:
+                listed.append(x)
+        else:
+            listed.append(x)
+            
+    return listed
+
+
+
 def recognize():
-    global recognized_round
+    global recognized_round, current_degree
 
     # The robot must move enough to read the color on the next tile
     # and return to the original place.
 
     # Then turn 90 degrees and read the next adjacent tile.
-    adjacent_tiles = ["nothing", "nothing", "nothing", "nothing"]
+    directions = sortDirections(checkCorners())
+    #directions = checkCorners()
+    #adjacent_tiles = ["nothing", "nothing", "nothing", "nothing"]
 
     objectives = []
 
-    for index in range(len(adjacent_tiles)):
+    for index in range(len(directions)):
 
-        
+        print("eeee" + str(directions))
 
+        print(str(index))
         # Move towards the tile to read it
+        robot.turn(smallestAngleBetween(current_degree, directions[index]))
         robot.straight(READTILE)
         time.sleep(1)
 
@@ -489,31 +671,31 @@ def recognize():
 
         print("Color: " + str(color))
 
-        if color == Color.BLUE:
+        if color == Color.YELLOW:
             # An item was found and saved in the array
-            adjacent_tiles[index] = "Item"
+            #adjacent_tiles[index] = "Item"
             goal = calculateGoal()
             if goal != None:
                 objectives.append({"Type": "Item", "Axes": goal})
         
         elif color == Color.RED:
             # A piece of ammo was found and saved in the array
-            adjacent_tiles[index] = "Ammo"
+            #adjacent_tiles[index] = "Ammo"
             goal = calculateGoal()
             if goal != None:
                 objectives.append({"Type": "Ammo", "Axes": goal})
             
-        elif color == Color.YELLOW:
+        elif color == Color.BLUE:
             # A piece of ammo was found and saved in the array
-            adjacent_tiles[index] = "Zombie"
+            #adjacent_tiles[index] = "Zombie"
             goal = calculateGoal()
             if goal != None:
                 objectives.append({"Type": "Zombie", "Axes": goal})
             
         
         robot.straight(-READTILE)
-        robot.turn(90)
-        recognizeGoal()
+        if index == len(directions):
+            recognizeGoal(directions[index + 1])
         fixAngle()
 
     #Add the objectives to the goal array order by priority
@@ -581,21 +763,55 @@ def pickupItem():
  ========================================
 """
 
+def recognizeSmell():
+    global current_degree
+    if current_degree == RIGHT:
+        current_degree = CORNER_RIGHT_DOWN
+    elif current_degree == CORNER_RIGHT_DOWN:
+        current_degree = DOWN
+    elif current_degree == DOWN:
+        current_degree = CORNER_LEFT_DOWN
+    elif current_degree == CORNER_LEFT_DOWN:
+        current_degree = LEFT
+    elif current_degree == LEFT:
+        current_degree = CORNER_LEFT
+    elif current_degree == CORNER_LEFT:
+        current_degree = UP
+    elif current_degree == UP:
+        current_degree = CORNER_RIGHT
+    elif current_degree == CORNER_RIGHT:
+        current_degree = RIGHT
+
+def checkDistance():
+    global current_degree
+    flag = False
+
+    if current_degree == CORNER_RIGHT or current_degree == CORNER_LEFT or current_degree == CORNER_RIGHT_DOWN or current_degree == CORNER_LEFT_DOWN:
+        flag = True
+
+    return flag
+
+
 def senseSmell():
 
     danger = 0
 
-    for index in range(4):
+    for index in range(8):
 
         distance = distance_sensor.distance()
 
         if ( 140 < distance < 420 and danger <= 2 ):
-            danger = 2
+            if checkDistance():
+                danger = 1
+            else:
+                danger = 2
             
         elif ( 490 < distance < 710 and danger <= 1 ):
-            danger = 1
+            if not checkDistance():
+                danger = 1
 
-        robot.turn(90)
+        robot.turn(45)
+        recognizeSmell()
         fixAngle()
 
     print("Danger Sensed: " + str(danger))
@@ -626,6 +842,11 @@ def moveToGoal(goal):
             i += 1
 
 def main():
+   
+    t1 = threading.Thread(target=playAlarm)
+    #t2 = threading.Thread(target=moveToGoal, args=([3, 3],))
+    t1.start()
+    #t2.start()
 
     moveToGoal([3, 3])
 
