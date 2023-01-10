@@ -48,6 +48,8 @@ NEXTTILE = 300
 READTILE = 140
 # Pickup item distance
 PICKUPITEM = 160
+# Stun distance
+STUNZOMBIE = 120
 
 
 # Initialize the motors.
@@ -119,7 +121,8 @@ def goalAchieved(goal):
             if goalAxesXandY[index]["Axes"]:
                 for i, item in enumerate(goalAxesXandY[index]["Axes"]):
                     if goalAxesXandY[index]["Axes"][i]["Axes"] == goal:
-                        goalAxesXandY.remove(goalAxesXandY[index]["Axes"][i])
+                        print("ELIMINANDDOOOOOO")
+                        goalAxesXandY[index]["Axes"].pop(i)
         return True
     except ValueError:
         return False
@@ -179,8 +182,10 @@ def pickItem():
 
 def leaveItem():
     global item, alarm
+    
     item = False  
     alarm = False
+    openClaw()
 
 
 """
@@ -195,6 +200,19 @@ def playAlarm():
     while True: 
         if alarm:
             ev3.speaker.play_file(SoundFile.SONAR)
+
+"""
+ ========================================
+    Stun 
+ ========================================
+"""
+
+def stun():
+    closeClaw()
+    robot.straight(-STUNZOMBIE)
+    ev3.speaker.play_file(SoundFile.GOODBYE)
+    robot.straight(STUNZOMBIE)
+
 
 """
  ========================================
@@ -384,7 +402,7 @@ def defineGoalAngle():
 def checkGoal():
     goalAxes = getFirstGoal()
 
-    if goalAxes != []:
+    if goalAxes:
         if goalAxes["Axes"] == axesXandY:
             print("I'm here")
             goalAchieved(goalAxes["Axes"])
@@ -499,23 +517,22 @@ def movement():
                     if ammo:
                         shootToZombie()
                     else:
-                        ev3.speaker.play_file.say('Voy a por ti crack')
+                        ev3.speaker.say('Voy a por ti crack')
                     break
                 newPosition(oppositeMovement(lastMovement[0]))
                 break
             if steps == 0:              
                 recognize()
-                #ammo = True
                 if ammo:
                     shootToZombie()
                     break
                 move() #Stunn
                 break
 
-        recognize()
-        print("TESTTTTTTTTTTTTTTTTTTTTT " + str(goalAxesXandY))
+        #recognize()
+        #print("TESTTTTTTTTTTTTTTTTTTTTT " + str(goalAxesXandY))
         if not recognized_round:
-            test = random.randint(1,3)
+            test = random.randint(1,2)
             if(test == 1):
                 recognize()
                 if steps == 1:
@@ -525,8 +542,15 @@ def movement():
         boolean = checkFinale()
         if not boolean: 
             break
-
+        
+        
+        print("Looking for items in this box 2")
+        searchColors()
+        checkGoal()
         steps += 1
+
+        if steps == 2 and not recognized_round:
+            recognize()
 
     recognized_round = False
     return boolean
@@ -548,15 +572,21 @@ def searchColors():
         # An item was found in the current tile
         print("I have found an item")
         pickupItem()
+        pickItem()
+        time.sleep(5)
     elif color == Color.RED:
         # An ammo was found in the current tile
         print("I have found an ammo")
         pickupItem()
         pickAmmo()
+        time.sleep(5)
     elif color == Color.BLUE:
         # A Zombie was found in the current tile
-        ev3.speaker.play_file.say('Voy a por ti crack')
-        
+        ev3.speaker.say('Voy a por ti crack')
+        stun()
+        time.sleep(5)
+
+          
 
 
 def detectColor():
@@ -654,11 +684,15 @@ def recognize():
 
     for index in range(len(directions)):
 
-        print("eeee" + str(directions))
 
+        print("eeee" + str(directions))
+        print("CURRENTTTT " + str(current_degree))
         print(str(index))
         # Move towards the tile to read it
         robot.turn(smallestAngleBetween(current_degree, directions[index]))
+        #if index != len(directions) - 1: 
+        print("SIUUUUUUUUUUU " + str(directions[index]))
+        recognizeGoal(directions[index])
         robot.straight(READTILE)
         time.sleep(1)
 
@@ -694,8 +728,7 @@ def recognize():
             
         
         robot.straight(-READTILE)
-        if index == len(directions):
-            recognizeGoal(directions[index + 1])
+
         fixAngle()
 
     #Add the objectives to the goal array order by priority
@@ -750,11 +783,11 @@ def shootCannon():
 def pickupItem():
 
     openClaw()
-    robot.straight(PICKUPITEM)
+    #robot.straight(PICKUPITEM)
     robot.turn(-30)
     closeClaw()
     robot.turn(30)
-    robot.straight(NEXTTILE - PICKUPITEM)
+    #robot.straight(NEXTTILE - PICKUPITEM)
 
 
 """
@@ -827,6 +860,7 @@ def moveToGoal(goal):
 
     #addGoal(goal, "Objective")
 
+    pickItem()
     moving = True
     i = 0
     print("Initial Angle: " + str(gyro_sensor.angle()))
@@ -834,6 +868,7 @@ def moveToGoal(goal):
     while(moving):
 
         if(True):
+        #if(button.pressed()):
             time.sleep(1)
             print("Iteration: " + str(i))
             print("Initial Position: " + str(axesXandY))
@@ -843,9 +878,9 @@ def moveToGoal(goal):
 
 def main():
    
-    t1 = threading.Thread(target=playAlarm)
+    #t1 = threading.Thread(target=playAlarm)
     #t2 = threading.Thread(target=moveToGoal, args=([3, 3],))
-    t1.start()
+    #t1.start()
     #t2.start()
 
     moveToGoal([3, 3])
