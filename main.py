@@ -121,7 +121,6 @@ def goalAchieved(goal):
             if goalAxesXandY[index]["Axes"]:
                 for i, item in enumerate(goalAxesXandY[index]["Axes"]):
                     if goalAxesXandY[index]["Axes"][i]["Axes"] == goal:
-                        print("ELIMINANDDOOOOOO")
                         goalAxesXandY[index]["Axes"].pop(i)
         return True
     except ValueError:
@@ -369,8 +368,6 @@ def defineGoalAngle():
     goal = []
     decision = None
 
-    print("AAAAAAAAAAAAAAAA " + str(goalAxes))
-
     if goalAxes == []:
         removeGoal = None
         if lastMovement:
@@ -529,8 +526,6 @@ def movement():
                 move() #Stunn
                 break
 
-        #recognize()
-        #print("TESTTTTTTTTTTTTTTTTTTTTT " + str(goalAxesXandY))
         if not recognized_round:
             test = random.randint(1,2)
             if(test == 1):
@@ -640,7 +635,6 @@ def sortDirections2(list_of_directions):
             listed.insert(range(len(listed)), x)
             listed.remove(x)
 
-    print("Siuuuuuuuuu " + str(listed))
     return listed
 
 
@@ -684,14 +678,9 @@ def recognize():
 
     for index in range(len(directions)):
 
-
-        print("eeee" + str(directions))
-        print("CURRENTTTT " + str(current_degree))
-        print(str(index))
         # Move towards the tile to read it
         robot.turn(smallestAngleBetween(current_degree, directions[index]))
-        #if index != len(directions) - 1: 
-        print("SIUUUUUUUUUUU " + str(directions[index]))
+
         recognizeGoal(directions[index])
         robot.straight(READTILE)
         time.sleep(1)
@@ -878,9 +867,9 @@ def moveToGoal(goal):
 
 def main():
    
-    #t1 = threading.Thread(target=playAlarm)
+    t1 = threading.Thread(target=playAlarm)
     #t2 = threading.Thread(target=moveToGoal, args=([3, 3],))
-    #t1.start()
+    t1.start()
     #t2.start()
 
     moveToGoal([3, 3])
