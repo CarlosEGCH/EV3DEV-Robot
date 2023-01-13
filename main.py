@@ -589,7 +589,7 @@ def movement():
                         move()
                         searchColors()
                     break
-                newPosition(oppositeMovement(lastMovement[len(lastMovement) - 2]))
+                newPosition(oppositeMovement(lastMovement[indexOf()]))
                 break
             if steps == 0:
                 steps += 1              
@@ -638,11 +638,24 @@ def movement():
                     move()
                     searchColors()
             else:
-                newPosition(oppositeMovement(lastMovement[len(lastMovement) - 1]))
+                newPosition(oppositeMovement(lastMovement[indexOf()]))
         
     recognized_round = False
     return boolean
 
+"""
+ ========================================
+ Get the index of the last movement
+ ========================================
+"""
+
+def indexOf():
+    global lastMovement
+
+    if len(lastMovement) == 1:
+        return 0
+
+    return len(lastMovement) - 2
 
 """
  ========================================
