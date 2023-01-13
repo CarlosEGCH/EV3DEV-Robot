@@ -43,11 +43,9 @@ MIN_AXE = 1
 MAX_STEPS = 2
 MIN_STEPS = 1
 # 1 tile to the next: 300
-NEXTTILE = 300
+NEXTTILE = 290
 # Necessary movement to read the next tile
 READTILE = 140
-# Pickup item distance
-PICKUPITEM = 160
 # Stun distance
 STUNZOMBIE = 120
 
@@ -90,7 +88,7 @@ recognized_round = False
 num_item = 0
 #alarm 
 alarm = False
-
+# The 4 last movements that the SB has given are stored in this array
 lastMovement = []
 
 """
@@ -101,12 +99,15 @@ lastMovement = []
 
 def addGoal(goal, type_name):
     global goalAxesXandY
+    #Creates the dictionary to be inserted in the goalAxesXandY array
     dicti = {"Type": type_name,
              "Axes": goal}
+    #Insert the dictionary in the specific type 
     for index, item in enumerate(goalAxesXandY):
         if item["Type"] == type_name:
-            goalAxesXandY[index]["Axes"].insert(0,dicti)
-            break
+            if dicti not in goalAxesXandY[index]["Axes"]:
+                goalAxesXandY[index]["Axes"].insert(0,dicti)
+                break
 
 """
  ========================================
@@ -117,6 +118,8 @@ def addGoal(goal, type_name):
 def goalAchieved(goal):
     try:
         global goalAxesXandY
+
+        #Search for the goal and remove it from the array
         for index in range(len(goalAxesXandY)):
             if goalAxesXandY[index]["Axes"]:
                 for i, item in enumerate(goalAxesXandY[index]["Axes"]):
@@ -134,6 +137,8 @@ def goalAchieved(goal):
 
 def getFirstGoal():
     global goalAxesXandY
+
+    #Returns the first occurrence
     for index in range(len(goalAxesXandY)):
         if goalAxesXandY[index]["Axes"]:
             return goalAxesXandY[index]["Axes"][0]
@@ -209,8 +214,8 @@ def playAlarm():
 def stun():
     closeClaw()
     robot.straight(-STUNZOMBIE)
-    ev3.speaker.play_file(SoundFile.GOODBYE)
-    robot.straight(STUNZOMBIE)
+    robot.straight(STUNZOMBIE + 80)
+    robot.straight(-80)
 
 
 """
@@ -244,13 +249,13 @@ def fixAngle():
             robot.turn(1)
             fixedAngle += 1
         else:
-            if abs(gyro_sensor.angle() % 360) == 0:
+            if abs(gyro_sensor.angle() % 360) == 0 or abs(gyro_sensor.angle()) == 3228: 
                 gyro_sensor.reset_angle(0)
             break
 
 """
  ========================================
-    Return the smallest angle to see if the SB moves left or right
+    Return the smallest angle to see if the SB turns left or right
  ========================================
 """
 
@@ -291,15 +296,21 @@ def newPosition(goalAngle):
     print("Current Before Turn: " + str(gyro_sensor.angle()))
     robot.turn(test)
     print("Current After Turn: " + str(gyro_sensor.angle()))
-    time.sleep(1)
+    time.sleep(2)
     fixAngle()
     robot.straight(NEXTTILE)
-    time.sleep(1)
+    time.sleep(2)
     fixAngle()
     #Update the SB's direction and Axes
     current_degree = goalAngle
     updateAxes(goalAngle)
     return
+
+"""
+ ========================================
+    Save the current tile in the lastMovements array and delete the least recent
+ ========================================
+"""
 
 def mov():
     global lastMovement
@@ -307,8 +318,16 @@ def mov():
     add = axesXandY
     lastMovement.append([add[0], add[1]])
 
+    print("Last Movements: " + str(lastMovement))
+
     if len(lastMovement) == 4:
-        lastMovement.pop(3)
+        lastMovement.pop(0)
+
+"""
+ ========================================
+    Delete the lastMovements to where the SB cant go back 
+ ========================================
+"""
 
 def deleteMovement():
     global lastMovement, axesXandY
@@ -327,23 +346,31 @@ def deleteMovement():
     if [axesXandY[0], axesXandY[1] - 1] in lastMovement:
         removeMovement.append(UP)
 
+    print("Deleted movements of previous rounds" + str(removeMovement))
+
     return removeMovement
-    
+
+"""
+ ========================================
+    Returns the opposite Movement to the one received as argument 
+ ========================================
+"""
 
 def oppositeMovement(lastMovement):
+    global axesXandY
 
-    if lastMovement == RIGHT:
+    if lastMovement == [axesXandY[0] - 1, axesXandY[1]]:
             return LEFT
-    elif lastMovement == LEFT:
+    elif lastMovement == [axesXandY[0] + 1, axesXandY[1]]:
             return RIGHT
-    elif lastMovement == UP:
+    elif lastMovement == [axesXandY[0], axesXandY[1] + 1]:
             return DOWN
-    elif lastMovement == DOWN:
+    elif lastMovement == [axesXandY[0], axesXandY[1] - 1]:
             return UP
 
 """
  ========================================
- Defines the path to be taken by the SB
+ Remove the options where the SB exits the game board
  ========================================
 """
 
@@ -362,18 +389,26 @@ def test(removeGoal):
         goal.remove(UP)
     return goal
 
+"""
+ ========================================
+ Defines the path to be taken by the SB
+ ========================================
+"""
+
 def defineGoalAngle():
     global axesXandY, lastMovement
     goalAxes = getFirstGoal()
     goal = []
     decision = None
 
-    if goalAxes == []:
+    #If the SB does not have an objective, he takes the path he wants
+    if not goalAxes:
         removeGoal = None
         if lastMovement:
             removeGoal = deleteMovement()
         goal = test(removeGoal)
-    
+
+    #Otherwise he moves to the objective
     elif goalAxes["Axes"][0] > axesXandY[0]:
         goal.append(RIGHT)
     elif goalAxes["Axes"][0] < axesXandY[0]:
@@ -383,6 +418,7 @@ def defineGoalAngle():
     elif goalAxes["Axes"][1] < axesXandY[1]:
         goal.append(UP)
 
+    #If there is more than one option the SB takes a random option
     if goal != []:
         decision = random.choice(goal)
         print("My move is: " + str(decision))
@@ -406,6 +442,11 @@ def checkGoal():
             return True
     return False
 
+"""
+ ========================================
+ Move the SB to the goal previously defined 
+ ========================================
+"""
 
 def move():
     goal = defineGoalAngle()
@@ -416,6 +457,12 @@ def move():
         if checkGoal():
             return False
 
+"""
+ ========================================
+ Aim to the zombie next to him
+ ========================================
+"""
+
 def aimToZombie():
     global axesXandY, current_degree
 
@@ -425,6 +472,7 @@ def aimToZombie():
     if goalAxes["Type"] == "Zombie":
         axes = goalAxes["Axes"]
 
+    #Determine which tile the zombie is on
     axesX = axesXandY[0] - axes[0]
     axesY = axesXandY[1] - axes[1]
 
@@ -436,19 +484,26 @@ def aimToZombie():
         angle = DOWN
     elif axesY > 0:
         angle = UP
+
     print("Angle " + str(angle) + " Current degree " + str(current_degree))
     test = smallestAngleBetween(current_degree, angle)
     print("Smallest Angle Between " + str(test))
     print("Current Before Turn: " + str(gyro_sensor.angle()))
     robot.turn(test)
     print("Current After Turn: " + str(gyro_sensor.angle()))
-    time.sleep(1)
+    time.sleep(2)
     fixAngle()
-    time.sleep(1)
-    #Update the SB's direction and Axes
+    time.sleep(2)
+    # Update the SB's direction
     current_degree = angle
-
+    # Delete that have just died from the goalAxesXandY array
     goalAchieved(axes)
+
+"""
+ ========================================
+ Shoot to the zombie he is aiming to
+ ========================================
+"""
 
 def shootToZombie():
     aimToZombie()
@@ -466,11 +521,14 @@ def checkFinale():
     flagWin = True
 
     if axesXandY == axesWin:
+        # If the SB still do not have the two items, continue the game
         if item and num_item < 2:
             leaveItem()
             num_item += 1
+            # Remove from the goalAxesXandY the Mota objective
             goalAchieved(axesWin)
 
+    # If the SB have the two items, wins the game
     if num_item == 2:
         flagWin = False
 
@@ -479,7 +537,7 @@ def checkFinale():
 
 """
  ========================================
- Movement of the SB each round
+ Movement of the SB each round and logical decision making
  ========================================
 """
 
@@ -490,42 +548,62 @@ def movement():
     boolean = True
     
     while steps < current_steps:
-
         mov()
         print("Looking for items in this box")
         searchColors()
         print("Sensing Danger")
         time.sleep(2)
         danger = senseSmell()
+        time.sleep(5)
+
+        # The most important thing to make a decision is the smell
+        # Danger could take values from 0 to 2 where 2 is the most dangerous situation
+
         if danger == 1:
             if steps == 1:
                 if not recognized_round and ammo:
                     move()
                     danger = senseSmell()
+                    time.sleep(5)
                     if danger == 2:
                         recognize()
                         shootToZombie()
+                        time.sleep(5)
                     break
                 break
+            if steps == 0:
+                move()
+                steps += 1
+                boolean = checkFinale()
+                if not boolean: 
+                    break
+                continue
         elif danger == 2:
             if steps == 1:
                 if not recognized_round:
                     recognize()
                     if ammo:
                         shootToZombie()
+                        time.sleep(5)
                     else:
-                        ev3.speaker.say('Voy a por ti crack')
+                        move()
+                        searchColors()
                     break
-                newPosition(oppositeMovement(lastMovement[0]))
+                newPosition(oppositeMovement(lastMovement[len(lastMovement) - 2]))
                 break
-            if steps == 0:              
+            if steps == 0:
+                steps += 1              
                 recognize()
                 if ammo:
                     shootToZombie()
+                    time.sleep(5)
                     break
-                move() #Stunn
+                move() #Move to Stunn the Zombie
+                searchColors()
                 break
 
+        # The SB has a 50% chance of doing the recognizement in each movement, except when there is a specific action 
+        # for a specific situation (The ones shown above)
         if not recognized_round:
             test = random.randint(1,2)
             if(test == 1):
@@ -538,15 +616,30 @@ def movement():
         if not boolean: 
             break
         
-        
-        print("Looking for items in this box 2")
-        searchColors()
         checkGoal()
         steps += 1
 
         if steps == 2 and not recognized_round:
             recognize()
 
+    # Check after the movement to see if there is something in the current tile and if there is a zombie close to him
+    print("Looking for items in this box 2")
+    searchColors()
+    if steps == 1:
+        time.sleep(5)
+        danger = senseSmell()
+        if danger == 2:
+            if not recognized_round:
+                recognize()
+                if ammo:
+                    shootToZombie()
+                    time.sleep(5)
+                else:    
+                    move()
+                    searchColors()
+            else:
+                newPosition(oppositeMovement(lastMovement[len(lastMovement) - 1]))
+        
     recognized_round = False
     return boolean
 
@@ -563,34 +656,48 @@ def searchColors():
     color = detectColor()
     print(color)
 
-    if color == Color.YELLOW:
+    if color == Color.GREEN and not item:
         # An item was found in the current tile
         print("I have found an item")
         pickupItem()
         pickItem()
-        time.sleep(5)
+        time.sleep(8)
     elif color == Color.RED:
         # An ammo was found in the current tile
         print("I have found an ammo")
         pickupItem()
         pickAmmo()
-        time.sleep(5)
+        time.sleep(8)
     elif color == Color.BLUE:
         # A Zombie was found in the current tile
-        ev3.speaker.say('Voy a por ti crack')
         stun()
-        time.sleep(5)
+        time.sleep(8)
 
-          
-
+"""
+ ========================================
+ Detect the color in the current tile
+ ========================================
+"""          
 
 def detectColor():
     return color_sensor.color()
+
+"""
+ ========================================
+ Update the angle where the SB is currently watching to
+ ========================================
+""" 
 
 def recognizeGoal(goal):
     global current_degree
     
     current_degree = goal
+
+"""
+ ========================================
+ Calculates the axes where the SB has to move depending on the current_degree (Current Angle)
+ ========================================
+""" 
     
 def calculateGoal():
     global axesXandY
@@ -608,6 +715,12 @@ def calculateGoal():
             return [axesXandY[0], axesXandY[1] - 1]
     return None
 
+"""
+ ========================================
+ Removes out of game board moves to do logical adjacent tile recognizement 
+ ========================================
+""" 
+
 def checkCorners():
     global axesXandY
 
@@ -624,21 +737,11 @@ def checkCorners():
 
     return chances 
 
-def sortDirections2(list_of_directions):
-    global current_degree
-
-    listed = sorted(list_of_directions)
-    aux = listed
-
-    for index, x in enumerate(aux):
-        if x < current_degree:
-            listed.insert(range(len(listed)), x)
-            listed.remove(x)
-
-    return listed
-
-
-
+"""
+ ========================================
+ Sorts the list of possible recognition moves to look natural
+ ========================================
+""" 
 
 def sortDirections(list_of_directions):
     global current_degree
@@ -661,7 +764,11 @@ def sortDirections(list_of_directions):
             
     return listed
 
-
+"""
+ ========================================
+ Recognizes what is in its 4 adjacent tiles
+ ========================================
+""" 
 
 def recognize():
     global recognized_round, current_degree
@@ -671,46 +778,43 @@ def recognize():
 
     # Then turn 90 degrees and read the next adjacent tile.
     directions = sortDirections(checkCorners())
-    #directions = checkCorners()
-    #adjacent_tiles = ["nothing", "nothing", "nothing", "nothing"]
-
+    # List of tiles where the SB found something
     objectives = []
 
     for index in range(len(directions)):
 
-        # Move towards the tile to read it
+        # Move towards the tile to read it and correct the angle error
         robot.turn(smallestAngleBetween(current_degree, directions[index]))
+        fixAngle()
+        time.sleep(2)
 
         recognizeGoal(directions[index])
         robot.straight(READTILE)
-        time.sleep(1)
+        time.sleep(2)
 
         # Correct the angle error
         fixAngle()
-        time.sleep(1)
+        time.sleep(2)
 
         # Detect which color the next tile is
         color = detectColor()
 
         print("Color: " + str(color))
 
-        if color == Color.YELLOW:
+        if color == Color.GREEN:
             # An item was found and saved in the array
-            #adjacent_tiles[index] = "Item"
             goal = calculateGoal()
             if goal != None:
                 objectives.append({"Type": "Item", "Axes": goal})
         
         elif color == Color.RED:
             # A piece of ammo was found and saved in the array
-            #adjacent_tiles[index] = "Ammo"
             goal = calculateGoal()
             if goal != None:
                 objectives.append({"Type": "Ammo", "Axes": goal})
             
         elif color == Color.BLUE:
-            # A piece of ammo was found and saved in the array
-            #adjacent_tiles[index] = "Zombie"
+            # A Zombie was found and saved in the array
             goal = calculateGoal()
             if goal != None:
                 objectives.append({"Type": "Zombie", "Axes": goal})
@@ -720,19 +824,16 @@ def recognize():
 
         fixAngle()
 
-    #Add the objectives to the goal array order by priority
+    #Add the objectives to the goal array
     if len(objectives) != 0:
-        #newlist = sorted(objectives, key=operator.itemgetter('Type'))
-
-        #Test
-        newlist = objectives
         
-        for index in range(len(newlist)):
-            addGoal(newlist[index]["Axes"], newlist[index]["Type"])
+        for index in range(len(objectives)):
+            addGoal(objectives[index]["Axes"], objectives[index]["Type"])
             
     
     # Update the variable per round 
     recognized_round = True
+
 
 """
  ========================================
@@ -772,16 +873,14 @@ def shootCannon():
 def pickupItem():
 
     openClaw()
-    #robot.straight(PICKUPITEM)
     robot.turn(-30)
     closeClaw()
     robot.turn(30)
-    #robot.straight(NEXTTILE - PICKUPITEM)
 
 
 """
  ========================================
- Zombie recognizement
+ Update the current degree (Current Angle) while the SB is doing the scent recognition
  ========================================
 """
 
@@ -804,6 +903,12 @@ def recognizeSmell():
     elif current_degree == CORNER_RIGHT:
         current_degree = RIGHT
 
+"""
+ ========================================
+ Check if the SB is doing the scent recognition diagonally to verify if the danger is "1"
+ ========================================
+"""
+
 def checkDistance():
     global current_degree
     flag = False
@@ -813,6 +918,11 @@ def checkDistance():
 
     return flag
 
+"""
+ ========================================
+ Zombie recognize the smell both diagonally, vertically and horiontally and return the danger that the SB has to die
+ ========================================
+"""
 
 def senseSmell():
 
@@ -822,17 +932,18 @@ def senseSmell():
 
         distance = distance_sensor.distance()
 
-        if ( 140 < distance < 420 and danger <= 2 ):
+        if ( 150 < distance < 340 and danger <= 2 ):
             if checkDistance():
                 danger = 1
             else:
                 danger = 2
             
-        elif ( 490 < distance < 710 and danger <= 1 ):
+        elif ( 520 < distance < 660 and danger <= 1 ):
             if not checkDistance():
                 danger = 1
 
         robot.turn(45)
+        time.sleep(2)
         recognizeSmell()
         fixAngle()
 
@@ -841,38 +952,38 @@ def senseSmell():
 
 """
  ========================================
- Main Execution
+ Main Function
  ========================================
 """
 
-def moveToGoal(goal):
+def moveToGoal():
 
-    #addGoal(goal, "Objective")
-
-    pickItem()
     moving = True
     i = 0
     print("Initial Angle: " + str(gyro_sensor.angle()))
 
     while(moving):
 
-        if(True):
-        #if(button.pressed()):
-            time.sleep(1)
+        if(button.pressed()):
+            time.sleep(2)
             print("Iteration: " + str(i))
             print("Initial Position: " + str(axesXandY))
             moving = movement()
             print("Final Position: " + str(axesXandY))
             i += 1
 
+"""
+ ========================================
+ Main Execution
+ ========================================
+"""
+
 def main():
    
     t1 = threading.Thread(target=playAlarm)
-    #t2 = threading.Thread(target=moveToGoal, args=([3, 3],))
     t1.start()
-    #t2.start()
 
-    moveToGoal([3, 3])
+    moveToGoal()
 
 
 # Execute:
